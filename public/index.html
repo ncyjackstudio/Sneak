@@ -28,12 +28,11 @@
     .btn.sec{background:transparent;color:#32c832;border:2px solid #333;}
     .btn.sec:active{background:#0a140a;}
 
-    /* Game screen */
     #game{flex-direction:column;align-items:center;width:100%;height:100dvh;overflow:hidden;}
 
     #bar{display:flex;align-items:center;justify-content:space-between;
       width:100%;padding:6px 12px;min-height:36px;}
-    #score-lbl{font-size:.85rem;color:#32c832;}
+    #score-lbl{font-size:.85rem;color:#32c832;letter-spacing:1px;}
     #bar-btns{display:flex;gap:6px;}
     #bar-btns button{background:#111;border:1px solid #222;border-radius:6px;
       color:#555;font-size:.65rem;font-family:inherit;padding:4px 9px;cursor:pointer;}
@@ -42,12 +41,12 @@
     #cw{position:relative;width:min(100vw, calc(100dvh - 180px) * 1.25);}
     canvas{border:2px solid #111;background:#050505;display:block;width:100%;height:auto;touch-action:none;}
 
-    /* Overlay */
     #ov{position:absolute;inset:0;display:flex;flex-direction:column;
-      align-items:center;justify-content:center;gap:14px;background:rgba(0,0,0,.92);}
+      align-items:center;justify-content:center;gap:14px;background:rgba(0,0,0,.85);}
     #ov.hidden{display:none;}
-    #ov-title{font-size:clamp(1.2rem,5vw,1.8rem);color:#32c832;letter-spacing:3px;}
-    #ov-score{font-size:clamp(.9rem,3vw,1.1rem);color:#555;}
+    #ov-title{font-size:clamp(1.4rem,6vw,2.2rem);color:#e03232;letter-spacing:4px;
+      text-shadow:0 0 20px #e03232,0 0 40px #e03232;}
+    #ov-score{font-size:clamp(.9rem,3vw,1.1rem);color:#777;}
     #ov-play{background:#32c832;color:#000;border:none;border-radius:8px;
       font-family:inherit;font-weight:bold;font-size:1rem;padding:13px 40px;cursor:pointer;}
     #ov-play:active{background:#28a828;}
@@ -55,7 +54,6 @@
       font-family:inherit;font-weight:bold;font-size:.9rem;padding:11px 30px;cursor:pointer;}
     #ov-home:active{background:#0a140a;}
 
-    /* D-pad */
     #dpad{display:grid;grid-template-areas:'. u .' 'l . r' '. d .';
       grid-template-columns:repeat(3,58px);grid-template-rows:repeat(3,58px);
       gap:5px;margin-top:10px;flex-shrink:0;}
@@ -102,20 +100,28 @@
 </div>
 
 <script>
-const TILE=20, COLS=30, ROWS=24, TICK=130, FOOD=3
+const TILE=20, COLS=30, ROWS=24, TICK=130
 const UP=[0,-1], DN=[0,1], LT=[-1,0], RT=[1,0]
+const FOOD_COUNT=3
 
 const canvas=document.getElementById('c'), ctx=canvas.getContext('2d')
 canvas.width=COLS*TILE; canvas.height=ROWS*TILE
 
-let snake, dir, nextDir, food, score, gt, playerName
+// Game state
+let snake, dir, nextDir, food, score, gt, playerName, alive
+let rendering=false
 
+// Effect state
+let particles=[], rings=[], flash={a:0,color:'#fff'}, shake=0
+
+// ── screens ────────────────────────────────────────────────
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'))
   document.getElementById(id).classList.add('active')
 }
 showScreen('lobby')
 
+// ── lobby ──────────────────────────────────────────────────
 document.getElementById('bplay').onclick=startGame
 document.getElementById('iname').onkeydown=e=>{if(e.key==='Enter')startGame()}
 
@@ -123,21 +129,24 @@ function startGame(){
   playerName=document.getElementById('iname').value.trim().slice(0,14)||'Player'
   showScreen('game')
   restartGame()
+  if(!rendering){rendering=true;requestAnimationFrame(renderLoop)}
 }
 
+// ── game ───────────────────────────────────────────────────
 function restartGame(){
+  clearInterval(gt)
+  particles=[]; rings=[]; flash={a:0,color:'#fff'}; shake=0
   snake=[[15,12],[14,12],[13,12]]
-  dir=RT; nextDir=RT
-  food=[]; score=0
+  dir=RT; nextDir=RT; food=[]; score=0; alive=true
   spawnFood()
   updateScore()
   document.getElementById('ov').classList.add('hidden')
-  clearInterval(gt)
   gt=setInterval(tick,TICK)
 }
 
 function goHome(){
-  clearInterval(gt); gt=null
+  clearInterval(gt); gt=null; alive=false
+  particles=[]; rings=[]; flash={a:0}; shake=0
   document.getElementById('ov').classList.add('hidden')
   showScreen('lobby')
 }
@@ -147,11 +156,11 @@ document.getElementById('bbtn-home').onclick=goHome
 document.getElementById('ov-play').onclick=restartGame
 document.getElementById('ov-home').onclick=goHome
 
-// Game logic
+// ── food ───────────────────────────────────────────────────
 function spawnFood(){
   const occ=new Set(snake.map(([x,y])=>x+','+y))
   food.forEach(([x,y])=>occ.add(x+','+y))
-  while(food.length<FOOD){
+  while(food.length<FOOD_COUNT){
     let p
     do{p=[~~(Math.random()*COLS),~~(Math.random()*ROWS)]}
     while(occ.has(p[0]+','+p[1]))
@@ -159,39 +168,146 @@ function spawnFood(){
   }
 }
 
+// ── tick ───────────────────────────────────────────────────
 function tick(){
+  if(!alive)return
   dir=nextDir
   const head=[snake[0][0]+dir[0], snake[0][1]+dir[1]]
 
-  // Wall collision
-  if(head[0]<0||head[0]>=COLS||head[1]<0||head[1]>=ROWS){gameOver();return}
-  // Self collision
-  if(snake.some(([x,y])=>x===head[0]&&y===head[1])){gameOver();return}
+  if(head[0]<0||head[0]>=COLS||head[1]<0||head[1]>=ROWS){triggerDeath();return}
+  if(snake.some(([x,y])=>x===head[0]&&y===head[1])){triggerDeath();return}
 
   snake.unshift(head)
   const fi=food.findIndex(([fx,fy])=>fx===head[0]&&fy===head[1])
-  if(fi!==-1){score+=10;food.splice(fi,1);spawnFood()}
-  else snake.pop()
-
-  updateScore()
-  draw()
-}
-
-function gameOver(){
-  clearInterval(gt); gt=null
-  draw()
-  document.getElementById('ov-title').textContent='GAME OVER'
-  document.getElementById('ov-score').textContent=playerName+' — Score: '+score
-  document.getElementById('ov').classList.remove('hidden')
+  if(fi!==-1){
+    score+=10
+    food.splice(fi,1)
+    spawnFood()
+    eatEffect(head[0],head[1])
+    updateScore()
+  } else {
+    snake.pop()
+  }
 }
 
 function updateScore(){
   document.getElementById('score-lbl').textContent='Score: '+score
 }
 
-// Drawing
+// ── death ──────────────────────────────────────────────────
+function triggerDeath(){
+  alive=false
+  clearInterval(gt); gt=null
+  dieEffect()
+  setTimeout(showGameOver, 2200)
+}
+
+function showGameOver(){
+  document.getElementById('ov-score').textContent=playerName+' — Score: '+score
+  document.getElementById('ov').classList.remove('hidden')
+}
+
+// ── effects ────────────────────────────────────────────────
+function eatEffect(fx,fy){
+  const cx=(fx+.5)*TILE, cy=(fy+.5)*TILE
+  // Burst particles
+  for(let i=0;i<28;i++){
+    const angle=Math.PI*2*i/28+Math.random()*.4
+    const spd=3+Math.random()*5
+    particles.push({
+      x:cx, y:cy,
+      vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd,
+      life:22, maxLife:22,
+      color:['#ff4444','#ffd700','#ff8800','#ffffff','#ffaa00'][~~(Math.random()*5)],
+      size:4+Math.random()*7,
+      gravity:.12
+    })
+  }
+  // Expanding ring
+  rings.push({x:cx,y:cy,r:4,targetR:TILE*2.5,life:18,maxLife:18,color:'#ffd700',width:3})
+  rings.push({x:cx,y:cy,r:2,targetR:TILE*1.5,life:14,maxLife:14,color:'#ff8800',width:2})
+  // Flash
+  flash={a:.35,color:'#ffff88'}
+}
+
+function dieEffect(){
+  shake=18
+  flash={a:.85,color:'#ff0000'}
+  // Explode every snake segment
+  snake.forEach(([sx,sy],idx)=>{
+    const cx=(sx+.5)*TILE, cy=(sy+.5)*TILE
+    const delay=idx*12
+    const count=idx===0?20:10
+    for(let i=0;i<count;i++){
+      const angle=Math.random()*Math.PI*2
+      const spd=(idx===0?4:2)+Math.random()*8
+      particles.push({
+        x:cx, y:cy,
+        vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd-2,
+        life:55+~~(Math.random()*20), maxLife:75,
+        color:['#32c832','#50e850','#228822','#ffffff','#88ff88','#1a5c1a'][~~(Math.random()*6)],
+        size:5+Math.random()*12,
+        gravity:.18,
+        delay
+      })
+    }
+    rings.push({
+      x:cx, y:cy, r:2,
+      targetR:TILE*(idx===0?4:2.5),
+      life:25, maxLife:25,
+      color:idx===0?'#ffffff':'#32c832',
+      width:idx===0?4:2
+    })
+  })
+  // Extra shockwave from head
+  const hx=(snake[0][0]+.5)*TILE, hy=(snake[0][1]+.5)*TILE
+  rings.push({x:hx,y:hy,r:2,targetR:TILE*7,life:30,maxLife:30,color:'#ff4444',width:5})
+  rings.push({x:hx,y:hy,r:2,targetR:TILE*5,life:25,maxLife:25,color:'#ff8800',width:3})
+}
+
+function updateEffects(){
+  // Particles
+  particles=particles.filter(p=>p.life>0)
+  particles.forEach(p=>{
+    if(p.delay&&p.delay>0){p.delay--;return}
+    p.x+=p.vx; p.y+=p.vy
+    p.vx*=0.91; p.vy*=0.91
+    p.vy+=p.gravity||0
+    p.life--
+  })
+  // Rings
+  rings=rings.filter(r=>r.life>0)
+  rings.forEach(r=>{
+    r.r+=(r.targetR-r.r)*0.25
+    r.life--
+  })
+  // Flash fade
+  flash.a=Math.max(0,(flash.a||0)-0.05)
+  // Shake decay
+  shake=Math.max(0,shake-0.9)
+}
+
+// ── render loop (rAF, 60fps) ───────────────────────────────
+function renderLoop(){
+  if(document.getElementById('game').classList.contains('active')){
+    updateEffects()
+    draw()
+  }
+  requestAnimationFrame(renderLoop)
+}
+
+// ── draw ───────────────────────────────────────────────────
 function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height)
+  ctx.save()
+  // Screen shake
+  if(shake>0){
+    ctx.translate(
+      (Math.random()-.5)*shake*2,
+      (Math.random()-.5)*shake*2
+    )
+  }
+
+  ctx.clearRect(-shake*2,-shake*2,canvas.width+shake*4,canvas.height+shake*4)
 
   // Grid
   ctx.strokeStyle='#0d0d0d'; ctx.lineWidth=.5
@@ -205,15 +321,45 @@ function draw(){
     ctx.fillStyle='#ffd700'; ctx.beginPath(); ctx.arc(cx,cy,TILE/4,0,Math.PI*2); ctx.fill()
   })
 
-  // Snake
-  snake.forEach(([x,y],i)=>{
-    ctx.fillStyle= i===0 ? '#32c832' : '#228822'
-    rr(x*TILE+1,y*TILE+1,TILE-2,TILE-2,4); ctx.fill()
-    if(i>0){
-      ctx.fillStyle='#1a5c1a'
-      rr(x*TILE+5,y*TILE+5,TILE-10,TILE-10,2); ctx.fill()
-    }
+  // Snake (only draw if alive)
+  if(alive){
+    snake.forEach(([x,y],i)=>{
+      ctx.fillStyle= i===0?'#32c832':'#228822'
+      rr(x*TILE+1,y*TILE+1,TILE-2,TILE-2,4); ctx.fill()
+      if(i>0){ctx.fillStyle='#1a5c1a';rr(x*TILE+5,y*TILE+5,TILE-10,TILE-10,2);ctx.fill()}
+    })
+  }
+
+  // Rings
+  rings.forEach(r=>{
+    const a=(r.life/r.maxLife)
+    ctx.globalAlpha=a*0.9
+    ctx.strokeStyle=r.color
+    ctx.lineWidth=r.width*(0.5+a*0.5)
+    ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,Math.PI*2); ctx.stroke()
   })
+  ctx.globalAlpha=1
+
+  // Particles
+  particles.forEach(p=>{
+    if(p.delay&&p.delay>0)return
+    const a=p.life/p.maxLife
+    ctx.globalAlpha=a
+    ctx.fillStyle=p.color
+    const s=p.size*(.4+a*.6)
+    rr(p.x-s/2,p.y-s/2,s,s,2); ctx.fill()
+  })
+  ctx.globalAlpha=1
+
+  // Flash overlay
+  if(flash.a>0.01){
+    ctx.globalAlpha=flash.a
+    ctx.fillStyle=flash.color
+    ctx.fillRect(-shake*2,-shake*2,canvas.width+shake*4,canvas.height+shake*4)
+    ctx.globalAlpha=1
+  }
+
+  ctx.restore()
 }
 
 function rr(x,y,w,h,r){
@@ -225,9 +371,9 @@ function rr(x,y,w,h,r){
   ctx.closePath()
 }
 
-// Controls
+// ── controls ───────────────────────────────────────────────
 function opp(a,b){return a[0]===-b[0]&&a[1]===-b[1]}
-function move(d){if(!opp(d,dir))nextDir=d}
+function move(d){if(alive&&!opp(d,dir))nextDir=d}
 
 document.addEventListener('keydown',e=>{
   const m={ArrowUp:UP,w:UP,W:UP,ArrowDown:DN,s:DN,S:DN,
@@ -240,7 +386,6 @@ document.getElementById('dd').addEventListener('pointerdown',e=>{e.preventDefaul
 document.getElementById('dl').addEventListener('pointerdown',e=>{e.preventDefault();move(LT)})
 document.getElementById('dr').addEventListener('pointerdown',e=>{e.preventDefault();move(RT)})
 
-// Swipe on canvas
 let tx=null,ty=null
 canvas.addEventListener('touchstart',e=>{e.preventDefault();tx=e.touches[0].clientX;ty=e.touches[0].clientY},{passive:false})
 canvas.addEventListener('touchend',e=>{
