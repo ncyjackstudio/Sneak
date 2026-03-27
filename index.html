@@ -1,114 +1,101 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-  <title>Snake</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+  <title>Sneak — Multiplayer</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #000;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100dvh;
-      font-family: Consolas, monospace;
-      color: #fff;
-      overflow: hidden;
-      touch-action: none;
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{
+      background:#000;font-family:Consolas,monospace;color:#fff;
+      display:flex;flex-direction:column;align-items:center;
+      min-height:100dvh;overflow:hidden;touch-action:none;
     }
-    h1 {
-      font-size: clamp(1.4rem, 6vw, 2.5rem);
-      color: #32c832;
-      letter-spacing: 6px;
-      margin-bottom: 6px;
+    #lobby{
+      display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:16px;height:100dvh;padding:20px;
     }
-    #scoreboard {
-      font-size: clamp(0.8rem, 3vw, 1rem);
-      margin-bottom: 8px;
-      color: #aaa;
+    #lobby h1{font-size:clamp(2rem,10vw,3.5rem);color:#32c832;letter-spacing:8px;}
+    #lobby p{color:#555;font-size:.85rem;text-align:center;max-width:300px;}
+    #lobby input{
+      background:#111;border:2px solid #333;border-radius:8px;
+      color:#fff;font-family:inherit;font-size:1rem;
+      padding:10px 16px;width:min(300px,90vw);text-align:center;outline:none;
     }
-    #scoreboard span { color: #fff; font-weight: bold; }
-    #canvas-wrap {
-      position: relative;
-      width: min(100vw, 100dvh * 1.25);
+    #lobby input:focus{border-color:#32c832;}
+    #lobby button{
+      background:#32c832;color:#000;border:none;border-radius:8px;
+      font-family:inherit;font-weight:bold;font-size:1rem;
+      padding:12px 40px;cursor:pointer;letter-spacing:1px;width:min(300px,90vw);
     }
-    canvas {
-      border: 2px solid #222;
-      background: #0a0a0a;
-      display: block;
-      width: 100%;
-      height: auto;
-      touch-action: none;
-    }
-    #overlay {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
-      background: rgba(0,0,0,0.6);
-    }
-    #overlay.hidden { display: none; }
-    #overlay h2 { font-size: clamp(1.4rem, 6vw, 2rem); color: #e03232; }
-    #overlay p  { color: #aaa; font-size: clamp(0.75rem, 3vw, 0.95rem); text-align: center; padding: 0 16px; }
-    #overlay button {
-      margin-top: 6px;
-      padding: 12px 40px;
-      background: #32c832;
-      color: #000;
-      border: none;
-      border-radius: 8px;
-      font-size: clamp(0.9rem, 4vw, 1rem);
-      font-family: inherit;
-      font-weight: bold;
-      cursor: pointer;
-      letter-spacing: 1px;
-    }
-    #overlay button:active { background: #28a828; }
+    #lobby button:disabled{background:#1a6e1a;cursor:default;}
+    #lobby button:not(:disabled):active{background:#28a828;}
 
-    /* D-pad */
-    #dpad {
-      display: grid;
-      grid-template-areas: ". up ." "left . right" ". down .";
-      grid-template-columns: repeat(3, 60px);
-      grid-template-rows: repeat(3, 60px);
-      gap: 6px;
-      margin-top: 14px;
+    #game{display:none;flex-direction:column;align-items:center;width:100%;}
+    #topbar{
+      display:flex;align-items:center;justify-content:center;
+      width:min(600px,100vw);padding:6px 10px;gap:8px;flex-wrap:wrap;min-height:36px;
     }
-    #dpad button {
-      background: #1a1a1a;
-      border: 2px solid #333;
-      border-radius: 10px;
-      color: #32c832;
-      font-size: 1.4rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      user-select: none;
-      -webkit-user-select: none;
+    .player-chip{
+      display:flex;align-items:center;gap:5px;
+      background:#111;border-radius:20px;padding:3px 10px;font-size:.8rem;
     }
-    #dpad button:active { background: #2a2a2a; border-color: #32c832; }
-    #btn-up    { grid-area: up; }
-    #btn-left  { grid-area: left; }
-    #btn-right { grid-area: right; }
-    #btn-down  { grid-area: down; }
-    #hint { margin-top: 6px; font-size: 0.75rem; color: #333; }
+    .player-chip .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+    .player-chip.dead{opacity:.4;text-decoration:line-through;}
+
+    #canvas-wrap{position:relative;width:min(100vw,calc(100dvh - 180px)*1.25);}
+    canvas{border:2px solid #222;background:#0a0a0a;display:block;width:100%;height:auto;touch-action:none;}
+
+    #overlay{
+      position:absolute;inset:0;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:12px;
+      background:rgba(0,0,0,.75);
+    }
+    #overlay.hidden{display:none;}
+    #overlay h2{font-size:clamp(1.2rem,5vw,1.8rem);color:#32c832;}
+    #overlay p{color:#aaa;font-size:.9rem;}
+
+    #dpad{
+      display:grid;
+      grid-template-areas:'. up .' 'left . right' '. down .';
+      grid-template-columns:repeat(3,58px);grid-template-rows:repeat(3,58px);
+      gap:5px;margin-top:10px;
+    }
+    #dpad button{
+      background:#111;border:2px solid #222;border-radius:10px;
+      color:#32c832;font-size:1.3rem;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      user-select:none;-webkit-user-select:none;
+    }
+    #dpad button:active{background:#1a1a1a;border-color:#32c832;}
+    #btn-up{grid-area:up;}#btn-left{grid-area:left;}
+    #btn-right{grid-area:right;}#btn-down{grid-area:down;}
+
+    #toast{
+      position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+      background:#222;color:#aaa;padding:6px 16px;border-radius:20px;
+      font-size:.8rem;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;
+    }
+    #toast.show{opacity:1;}
   </style>
 </head>
 <body>
-  <h1>SNAKE</h1>
-  <div id="scoreboard">Score: <span id="score">0</span> &nbsp;|&nbsp; Best: <span id="best">0</span></div>
+
+<div id="lobby">
+  <h1>SNEAK</h1>
+  <p>Share the same Room ID with friends to play together</p>
+  <input id="inp-name" maxlength="16" placeholder="Your name" autocomplete="off"/>
+  <input id="inp-room" maxlength="20" placeholder="Room ID (e.g. room1)" autocomplete="off"/>
+  <button id="btn-join">JOIN GAME</button>
+</div>
+
+<div id="game">
+  <div id="topbar"></div>
   <div id="canvas-wrap">
     <canvas id="c"></canvas>
     <div id="overlay">
-      <h2 id="overlay-title">SNAKE</h2>
-      <p id="overlay-msg">Swipe or use D-pad to move</p>
-      <button id="btn">PLAY</button>
+      <h2 id="ov-title">Waiting…</h2>
+      <p id="ov-msg">Connecting to room</p>
     </div>
   </div>
   <div id="dpad">
@@ -117,162 +104,262 @@
     <button id="btn-right">▶</button>
     <button id="btn-down">▼</button>
   </div>
-  <div id="hint">Swipe on canvas &nbsp;|&nbsp; Arrow keys / WASD — move</div>
+</div>
 
+<div id="toast"></div>
+
+<script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
 <script>
-const TILE = 20, COLS = 30, ROWS = 24;
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
-canvas.width  = COLS * TILE;
-canvas.height = ROWS * TILE;
+const TILE=20,COLS=30,ROWS=24,TICK=120,FOOD_COUNT=3;
+const COLORS=['#32c832','#e03232','#3264e0','#e0c832','#c832c8','#32c8c8'];
+const STARTS=[[5,5],[25,5],[5,18],[25,18],[15,5],[15,18]];
+const UP=[0,-1],DOWN=[0,1],LEFT=[-1,0],RIGHT=[1,0];
 
-const overlay      = document.getElementById('overlay');
-const overlayTitle = document.getElementById('overlay-title');
-const overlayMsg   = document.getElementById('overlay-msg');
-const btn          = document.getElementById('btn');
-const scoreEl      = document.getElementById('score');
-const bestEl       = document.getElementById('best');
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+canvas.width=COLS*TILE; canvas.height=ROWS*TILE;
 
-let snake, dir, nextDir, food, score, best = 0, loop, paused = false, alive = false;
+const lobbyEl=document.getElementById('lobby');
+const gameEl=document.getElementById('game');
+const overlay=document.getElementById('overlay');
+const ovTitle=document.getElementById('ov-title');
+const ovMsg=document.getElementById('ov-msg');
+const topbar=document.getElementById('topbar');
 
-const UP = [0,-1], DOWN = [0,1], LEFT = [-1,0], RIGHT = [1,0];
+let ably,channel,myId,myName;
+let isHost=false,gameLoopTimer=null,colorCounter=0;
+let players={},food=[];
 
-function opposite(a, b) { return a[0] === -b[0] && a[1] === -b[1]; }
+// --- Lobby ---
+document.getElementById('btn-join').addEventListener('click',startJoin);
+document.getElementById('inp-room').addEventListener('keydown',e=>{if(e.key==='Enter')startJoin();});
+document.getElementById('inp-name').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('inp-room').focus();});
 
-function setDir(d) {
-  if (!opposite(d, dir)) nextDir = d;
-}
-
-function randomFood() {
-  const set = new Set(snake.map(([x,y]) => `${x},${y}`));
-  let pos;
-  do { pos = [Math.floor(Math.random()*COLS), Math.floor(Math.random()*ROWS)]; }
-  while (set.has(`${pos[0]},${pos[1]}`));
-  return pos;
-}
-
-function startGame() {
-  snake   = [[Math.floor(COLS/2), Math.floor(ROWS/2)]];
-  dir     = RIGHT;
-  nextDir = RIGHT;
-  food    = randomFood();
-  score   = 0;
-  paused  = false;
-  alive   = true;
-  scoreEl.textContent = 0;
-  overlay.classList.add('hidden');
-  clearInterval(loop);
-  loop = setInterval(tick, 100);
-}
-
-function endGame() {
-  alive = false;
-  clearInterval(loop);
-  if (score > best) { best = score; bestEl.textContent = best; }
-  overlayTitle.textContent = 'GAME OVER';
-  overlayMsg.textContent   = `Score: ${score}`;
-  btn.textContent          = 'PLAY AGAIN';
-  overlay.classList.remove('hidden');
-}
-
-function tick() {
-  dir = nextDir;
-  const head = [snake[0][0] + dir[0], snake[0][1] + dir[1]];
-  if (head[0] < 0 || head[0] >= COLS || head[1] < 0 || head[1] >= ROWS) return endGame();
-  if (snake.some(([x,y]) => x === head[0] && y === head[1])) return endGame();
-  snake.unshift(head);
-  if (head[0] === food[0] && head[1] === food[1]) {
-    score += 10;
-    scoreEl.textContent = score;
-    food = randomFood();
-  } else {
-    snake.pop();
+async function startJoin(){
+  const btn=document.getElementById('btn-join');
+  myName=(document.getElementById('inp-name').value.trim()||'Player').substring(0,16);
+  const roomId=document.getElementById('inp-room').value.trim()||'main';
+  btn.textContent='Connecting…';btn.disabled=true;
+  try{
+    await joinRoom(myName,roomId);
+    lobbyEl.style.display='none';
+    gameEl.style.display='flex';
+  }catch(err){
+    console.error(err);
+    alert('Connection failed. Check your internet and try again.');
+    btn.textContent='JOIN GAME';btn.disabled=false;
   }
-  draw();
 }
 
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+async function joinRoom(name,roomId){
+  ably=new Ably.Realtime({authUrl:'/api/auth'});
+  await new Promise((res,rej)=>{
+    ably.connection.once('connected',res);
+    ably.connection.once('failed',rej);
+  });
+  myId=ably.auth.clientId;
+  channel=ably.channels.get('sneak:'+roomId);
 
-  ctx.strokeStyle = '#1a1a1a';
-  ctx.lineWidth = 0.5;
-  for (let x = 0; x <= COLS; x++) { ctx.beginPath(); ctx.moveTo(x*TILE,0); ctx.lineTo(x*TILE,canvas.height); ctx.stroke(); }
-  for (let y = 0; y <= ROWS; y++) { ctx.beginPath(); ctx.moveTo(0,y*TILE); ctx.lineTo(canvas.width,y*TILE); ctx.stroke(); }
-
-  snake.forEach(([x,y], i) => {
-    const isHead = i === 0;
-    ctx.fillStyle = isHead ? '#1e8c1e' : '#32c832';
-    roundRect(ctx, x*TILE+1, y*TILE+1, TILE-2, TILE-2, 4);
-    ctx.fill();
-    if (!isHead) {
-      ctx.fillStyle = '#1e8c1e';
-      roundRect(ctx, x*TILE+5, y*TILE+5, TILE-10, TILE-10, 2);
-      ctx.fill();
-    }
+  // Subscribe to game messages
+  channel.subscribe('state',msg=>{
+    if(!isHost){overlay.classList.add('hidden');renderAll(msg.data.players,msg.data.food);}
+  });
+  channel.subscribe('dir',msg=>{
+    if(!isHost)return;
+    const p=players[msg.data.id];
+    if(p&&p.alive&&!opp(msg.data.dir,p.dir))p.nextDir=msg.data.dir;
+  });
+  channel.subscribe('round_end',()=>{
+    if(!isHost)showOverlay('ROUND OVER','Next round in 4 seconds…');
   });
 
-  const [fx, fy] = food;
-  const cx = fx*TILE + TILE/2, cy = fy*TILE + TILE/2;
-  ctx.fillStyle = '#dc3232';
-  ctx.beginPath(); ctx.arc(cx, cy, TILE/2-3, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = '#ffdc00';
-  ctx.beginPath(); ctx.arc(cx, cy, TILE/4, 0, Math.PI*2); ctx.fill();
+  // Presence
+  channel.presence.subscribe('enter',m=>toast(m.data.name+' joined'));
+  channel.presence.subscribe('leave',m=>{
+    toast(m.data.name+' left');
+    if(isHost)delete players[m.clientId];
+    reelectHost();
+  });
+
+  await channel.presence.enter({name});
+  await new Promise(r=>setTimeout(r,400)); // wait for presence sync
+  await reelectHost();
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
-}
-
-// Keyboard
-document.addEventListener('keydown', e => {
-  const map = {
-    ArrowUp: UP, w: UP, W: UP,
-    ArrowDown: DOWN, s: DOWN, S: DOWN,
-    ArrowLeft: LEFT, a: LEFT, A: LEFT,
-    ArrowRight: RIGHT, d: RIGHT, D: RIGHT,
-  };
-  if (map[e.key]) { setDir(map[e.key]); e.preventDefault(); }
-  if (e.key === 'Escape' && alive) {
-    paused = !paused;
-    paused ? clearInterval(loop) : (loop = setInterval(tick, 100));
+async function reelectHost(){
+  const members=await new Promise(r=>channel.presence.get((e,m)=>r(m||[])));
+  if(!members.length)return;
+  members.sort((a,b)=>a.clientId.localeCompare(b.clientId));
+  const hostId=members[0].clientId;
+  if(hostId===myId&&!isHost) becomeHost(members);
+  else if(hostId!==myId&&isHost){
+    clearInterval(gameLoopTimer);gameLoopTimer=null;isHost=false;
   }
-  if (e.key === ' ' && !alive) startGame();
+}
+
+function becomeHost(members){
+  isHost=true;colorCounter=0;players={};food=[];
+  (members||[]).forEach(m=>addPlayer(m.clientId,m.data.name));
+  spawnFood();
+  clearInterval(gameLoopTimer);
+  gameLoopTimer=setInterval(tick,TICK);
+  toast('You are the host');
+}
+
+function addPlayer(id,name){
+  if(players[id])return;
+  const idx=colorCounter++;
+  players[id]={id,name,color:COLORS[idx%COLORS.length],
+    snake:[STARTS[idx%STARTS.length].slice()],
+    dir:RIGHT,nextDir:RIGHT,score:0,alive:true};
+}
+
+// --- Game logic ---
+function opp(a,b){return a[0]===-b[0]&&a[1]===-b[1];}
+
+function randomPos(excluded){
+  let p;
+  do{p=[Math.floor(Math.random()*COLS),Math.floor(Math.random()*ROWS)];}
+  while(excluded.has(p[0]+','+p[1]));
+  return p;
+}
+
+function allCells(){
+  const s=new Set();
+  for(const p of Object.values(players))for(const[x,y]of p.snake)s.add(x+','+y);
+  return s;
+}
+
+function spawnFood(){
+  const occ=allCells();
+  food.forEach(([x,y])=>occ.add(x+','+y));
+  while(food.length<FOOD_COUNT)food.push(randomPos(occ));
+}
+
+function tick(){
+  const ps=Object.values(players);
+  if(!ps.length)return;
+
+  for(const p of ps){
+    if(!p.alive)continue;
+    p.dir=p.nextDir;
+    p.nextHead=[p.snake[0][0]+p.dir[0],p.snake[0][1]+p.dir[1]];
+  }
+  for(const p of ps){
+    if(!p.alive)continue;
+    const[hx,hy]=p.nextHead;
+    if(hx<0||hx>=COLS||hy<0||hy>=ROWS){p.alive=false;continue;}
+    if(p.snake.slice(1,-1).some(([x,y])=>x===hx&&y===hy)){p.alive=false;continue;}
+    for(const o of ps){
+      if(o.id===p.id||!o.alive)continue;
+      if(o.snake.some(([x,y])=>x===hx&&y===hy)){p.alive=false;break;}
+    }
+  }
+  for(const p of ps){
+    if(!p.alive)continue;
+    p.snake.unshift(p.nextHead);
+    const fi=food.findIndex(([fx,fy])=>fx===p.nextHead[0]&&fy===p.nextHead[1]);
+    if(fi!==-1){p.score+=10;food.splice(fi,1);}
+    else p.snake.pop();
+  }
+  spawnFood();
+
+  const state={players:ps.map(p=>({id:p.id,name:p.name,color:p.color,snake:p.snake,score:p.score,alive:p.alive})),food};
+  overlay.classList.add('hidden');
+  renderAll(state.players,state.food);
+  channel.publish('state',state);
+
+  const alive=ps.filter(p=>p.alive);
+  if(ps.length>1&&alive.length<=1){
+    clearInterval(gameLoopTimer);gameLoopTimer=null;
+    setTimeout(()=>{
+      channel.publish('round_end',{});
+      showOverlay('ROUND OVER','Next round in 4 seconds…');
+      setTimeout(()=>channel.presence.get((e,m)=>{if(m&&m.length)becomeHost(m);}),4000);
+    },500);
+  }
+}
+
+// --- Rendering ---
+function renderAll(ps,fd){renderTopbar(ps);draw(ps,fd);}
+
+function renderTopbar(ps){
+  topbar.innerHTML='';
+  ps.forEach(p=>{
+    const c=document.createElement('div');
+    c.className='player-chip'+(p.alive?'':' dead');
+    c.innerHTML=`<span class="dot" style="background:${p.color}"></span><span>${esc(p.name)}</span><span style="color:${p.color};margin-left:4px">${p.score}</span>`;
+    topbar.appendChild(c);
+  });
+}
+
+function draw(ps,fd){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle='#1a1a1a';ctx.lineWidth=0.5;
+  for(let x=0;x<=COLS;x++){ctx.beginPath();ctx.moveTo(x*TILE,0);ctx.lineTo(x*TILE,canvas.height);ctx.stroke();}
+  for(let y=0;y<=ROWS;y++){ctx.beginPath();ctx.moveTo(0,y*TILE);ctx.lineTo(canvas.width,y*TILE);ctx.stroke();}
+  fd.forEach(([fx,fy])=>{
+    const cx=fx*TILE+TILE/2,cy=fy*TILE+TILE/2;
+    ctx.fillStyle='#dc3232';ctx.beginPath();ctx.arc(cx,cy,TILE/2-3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#ffdc00';ctx.beginPath();ctx.arc(cx,cy,TILE/4,0,Math.PI*2);ctx.fill();
+  });
+  [...ps].sort((a,b)=>a.alive-b.alive).forEach(p=>{
+    ctx.globalAlpha=p.alive?1:0.3;
+    p.snake.forEach(([x,y],i)=>{
+      ctx.fillStyle=p.color;rr(x*TILE+1,y*TILE+1,TILE-2,TILE-2,4);ctx.fill();
+      if(i>0){ctx.fillStyle=darken(p.color);rr(x*TILE+5,y*TILE+5,TILE-10,TILE-10,2);ctx.fill();}
+    });
+    ctx.globalAlpha=1;
+  });
+}
+
+function darken(hex){
+  const n=parseInt(hex.slice(1),16);
+  return `rgb(${Math.max(0,((n>>16)&0xff)-60)},${Math.max(0,((n>>8)&0xff)-60)},${Math.max(0,(n&0xff)-60)})`;
+}
+function rr(x,y,w,h,r){
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
+}
+function showOverlay(t,m){ovTitle.textContent=t;ovMsg.textContent=m;overlay.classList.remove('hidden');}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+// --- Controls ---
+function sendDir(d){
+  if(isHost){const p=players[myId];if(p&&p.alive&&!opp(d,p.dir))p.nextDir=d;}
+  else channel.publish('dir',{id:myId,dir:d});
+}
+document.addEventListener('keydown',e=>{
+  const m={ArrowUp:UP,w:UP,W:UP,ArrowDown:DOWN,s:DOWN,S:DOWN,ArrowLeft:LEFT,a:LEFT,A:LEFT,ArrowRight:RIGHT,d:RIGHT,D:RIGHT};
+  if(m[e.key]){sendDir(m[e.key]);e.preventDefault();}
 });
+document.getElementById('btn-up').addEventListener('pointerdown',e=>{e.preventDefault();sendDir(UP);});
+document.getElementById('btn-down').addEventListener('pointerdown',e=>{e.preventDefault();sendDir(DOWN);});
+document.getElementById('btn-left').addEventListener('pointerdown',e=>{e.preventDefault();sendDir(LEFT);});
+document.getElementById('btn-right').addEventListener('pointerdown',e=>{e.preventDefault();sendDir(RIGHT);});
 
-// D-pad buttons
-document.getElementById('btn-up').addEventListener('pointerdown',    e => { e.preventDefault(); setDir(UP); });
-document.getElementById('btn-down').addEventListener('pointerdown',  e => { e.preventDefault(); setDir(DOWN); });
-document.getElementById('btn-left').addEventListener('pointerdown',  e => { e.preventDefault(); setDir(LEFT); });
-document.getElementById('btn-right').addEventListener('pointerdown', e => { e.preventDefault(); setDir(RIGHT); });
+let tx=null,ty=null;
+canvas.addEventListener('touchstart',e=>{e.preventDefault();tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:false});
+canvas.addEventListener('touchend',e=>{
+  e.preventDefault();if(tx===null)return;
+  const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;
+  if(Math.abs(dx)<10&&Math.abs(dy)<10)return;
+  sendDir(Math.abs(dx)>Math.abs(dy)?(dx>0?RIGHT:LEFT):(dy>0?DOWN:UP));
+  tx=ty=null;
+},{passive:false});
 
-// Swipe on canvas
-let touchX = null, touchY = null;
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  touchX = e.touches[0].clientX;
-  touchY = e.touches[0].clientY;
-}, { passive: false });
-canvas.addEventListener('touchend', e => {
-  e.preventDefault();
-  if (touchX === null) return;
-  const dx = e.changedTouches[0].clientX - touchX;
-  const dy = e.changedTouches[0].clientY - touchY;
-  if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-  if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? RIGHT : LEFT);
-  else setDir(dy > 0 ? DOWN : UP);
-  touchX = touchY = null;
-}, { passive: false });
+let toastTimer;
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2500);
+}
 
-btn.addEventListener('click', startGame);
-
-ctx.fillStyle = '#0a0a0a';
-ctx.fillRect(0, 0, canvas.width, canvas.height);
+// Auto-fill room from URL hash
+const hash=location.hash.slice(1);
+if(hash)document.getElementById('inp-room').value=hash;
 </script>
 </body>
 </html>
