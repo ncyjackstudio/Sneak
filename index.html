@@ -75,8 +75,9 @@
 <div id="lobby" class="screen">
   <h1>SNEAK</h1>
   <input id="iname" maxlength="14" placeholder="Your name (optional)" autocomplete="off"/>
-  <button class="btn" id="bcreate">CREATE ROOM</button>
-  <span class="sep">— or —</span>
+  <button class="btn" id="bsolo">PLAY SOLO</button>
+  <span class="sep">— multiplayer —</span>
+  <button class="btn sec" id="bcreate">CREATE ROOM</button>
   <input id="icode" maxlength="6" placeholder="Room code"
     style="text-transform:uppercase;letter-spacing:5px;font-size:1.2rem;" autocomplete="off"/>
   <button class="btn sec" id="bjoin">JOIN ROOM</button>
@@ -115,12 +116,13 @@ const canvas=document.getElementById('c'),ctx=canvas.getContext('2d')
 canvas.width=COLS*TILE; canvas.height=ROWS*TILE
 
 // ── state ──────────────────────────────────────────────────
-let myId=null,isHost=false,myCode='',myName=''
+let myId=null,isHost=false,isSolo=false,myCode='',myName=''
 let gt=null,ci=0,pl={},fd=[]
 let esState=null,esDirs=null,esPlayers=null
 
 // ── firebase REST helpers ──────────────────────────────────
 function fbSet(path,data){
+  if(isSolo)return Promise.resolve()
   return fetch(FB+'/'+path+'.json',{method:'PUT',body:JSON.stringify(data),
     headers:{'Content-Type':'application/json'}}).catch(()=>{})
 }
@@ -146,6 +148,18 @@ function showScreen(id){
 showScreen('lobby')
 
 // ── lobby ──────────────────────────────────────────────────
+document.getElementById('bsolo').onclick=()=>{
+  myName=getName()
+  myId='p'+Date.now()
+  isHost=true; isSolo=true
+  showScreen('game')
+  document.getElementById('rlbl').textContent='Solo'
+  ci=0; pl={}; fd=[]
+  addPl(myId,myName)
+  spawnFd()
+  document.getElementById('ov').classList.add('hidden')
+  startLoop()
+}
 document.getElementById('bcreate').onclick=()=>{
   myName=getName()
   myCode=randCode()
