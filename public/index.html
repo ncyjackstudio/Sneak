@@ -32,12 +32,17 @@
     /* Game */
     #game{flex-direction:column;align-items:center;width:100%;height:100dvh;overflow:hidden;}
     #bar{display:flex;align-items:center;justify-content:center;
-      width:100%;padding:4px 8px;gap:6px;flex-wrap:wrap;min-height:30px;}
+      width:100%;padding:4px 8px;gap:6px;flex-wrap:wrap;min-height:34px;position:relative;}
     .chip{display:flex;align-items:center;gap:4px;background:#0d0d0d;
       border-radius:20px;padding:2px 8px;font-size:.73rem;}
     .chip .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
     .chip.dead{opacity:.28;text-decoration:line-through;}
     #rlbl{font-size:.65rem;color:#2a2a2a;}
+    #bar-btns{position:absolute;right:8px;top:50%;transform:translateY(-50%);
+      display:flex;gap:4px;}
+    #bar-btns button{background:#111;border:1px solid #222;border-radius:6px;
+      color:#555;font-size:.65rem;font-family:inherit;padding:3px 7px;cursor:pointer;}
+    #bar-btns button:active{background:#1a1a1a;color:#32c832;}
 
     #cw{position:relative;width:min(100vw, calc(100dvh - 168px) * 1.25);}
     canvas{border:2px solid #111;background:#050505;display:block;width:100%;height:auto;touch-action:none;}
@@ -53,6 +58,10 @@
     #ov-go{background:#32c832;color:#000;border:none;border-radius:8px;
       font-family:inherit;font-weight:bold;font-size:1rem;padding:13px 40px;cursor:pointer;display:none;}
     #ov-go:active{background:#28a828;}
+    #ov-btns{display:none;gap:10px;flex-wrap:wrap;justify-content:center;}
+    #ov-btns button{background:transparent;color:#32c832;border:2px solid #333;border-radius:8px;
+      font-family:inherit;font-weight:bold;font-size:.9rem;padding:11px 24px;cursor:pointer;}
+    #ov-btns button:active{background:#0a140a;}
 
     #dpad{display:grid;grid-template-areas:'. u .' 'l . r' '. d .';
       grid-template-columns:repeat(3,58px);grid-template-rows:repeat(3,58px);
@@ -78,14 +87,20 @@
   <button class="btn" id="bsolo">PLAY SOLO</button>
   <span class="sep">— multiplayer —</span>
   <button class="btn sec" id="bcreate">CREATE ROOM</button>
-  <input id="icode" maxlength="6" placeholder="Room code"
-    style="text-transform:uppercase;letter-spacing:5px;font-size:1.2rem;" autocomplete="off"/>
+  <input id="icode" maxlength="4" placeholder="Room code"
+    style="text-transform:uppercase;letter-spacing:8px;font-size:1.4rem;" autocomplete="off"/>
   <button class="btn sec" id="bjoin">JOIN ROOM</button>
 </div>
 
 <!-- GAME -->
 <div id="game" class="screen">
-  <div id="bar"><span id="rlbl"></span></div>
+  <div id="bar">
+    <span id="rlbl"></span>
+    <div id="bar-btns">
+      <button id="bbtn-restart">RESTART</button>
+      <button id="bbtn-home">HOME</button>
+    </div>
+  </div>
   <div id="cw">
     <canvas id="c"></canvas>
     <div id="ov">
@@ -94,6 +109,10 @@
       <div id="ov-code"></div>
       <div id="ov-hint"></div>
       <button id="ov-go">START PLAYING ▶</button>
+      <div id="ov-btns">
+        <button id="ov-restart">RESTART</button>
+        <button id="ov-home">HOME</button>
+      </div>
     </div>
   </div>
   <div id="dpad">
@@ -110,6 +129,7 @@ const COLORS=['#32c832','#e03232','#3264e0','#e0c832','#c832c8','#32c8c8']
 const STARTS=[[5,5],[25,5],[5,18],[25,18],[15,5],[15,18]]
 const UP=[0,-1],DN=[0,1],LT=[-1,0],RT=[1,0]
 const FB='https://sneak-3c9c1-default-rtdb.asia-southeast1.firebasedatabase.app'
+const CODE_CHARS='ABCDEFGHJKLMNPQRSTUVWXYZ'
 
 // ── dom ────────────────────────────────────────────────────
 const canvas=document.getElementById('c'),ctx=canvas.getContext('2d')
@@ -154,17 +174,15 @@ document.getElementById('bsolo').onclick=()=>{
   isHost=true; isSolo=true
   showScreen('game')
   document.getElementById('rlbl').textContent='Solo'
-  ci=0; pl={}; fd=[]
-  addPl(myId,myName)
-  spawnFd()
-  document.getElementById('ov').classList.add('hidden')
-  startLoop()
+  document.getElementById('bbtn-restart').style.display=''
+  resetAndStart()
 }
 document.getElementById('bcreate').onclick=()=>{
   myName=getName()
   myCode=randCode()
   myId='p'+Date.now()+Math.random().toString(36).slice(2,6)
-  isHost=true
+  isHost=true; isSolo=false
+  document.getElementById('bbtn-restart').style.display=''
   showScreen('game')
   startHost()
 }
@@ -174,18 +192,67 @@ document.getElementById('bjoin').onclick=()=>{
   myName=getName()
   myCode=code
   myId='p'+Date.now()+Math.random().toString(36).slice(2,6)
-  isHost=false
+  isHost=false; isSolo=false
+  document.getElementById('bbtn-restart').style.display='none'
   showScreen('game')
   startClient()
 }
 document.getElementById('icode').onkeydown=e=>{if(e.key==='Enter')document.getElementById('bjoin').click()}
 
 function getName(){return document.getElementById('iname').value.trim().slice(0,14)||'Player'+~~(Math.random()*99+1)}
-function randCode(){return Math.random().toString(36).slice(2,6).toUpperCase()}
+function randCode(){
+  let c=''
+  for(let i=0;i<4;i++)c+=CODE_CHARS[~~(Math.random()*CODE_CHARS.length)]
+  return c
+}
+
+// ── home / restart ─────────────────────────────────────────
+function goHome(){
+  clearInterval(gt);gt=null
+  if(esState){esState.close();esState=null}
+  if(esDirs){esDirs.close();esDirs=null}
+  if(esPlayers){esPlayers.close();esPlayers=null}
+  isSolo=false;isHost=false;myId=null;myCode='';myName=''
+  ci=0;pl={};fd=[]
+  document.getElementById('ov').classList.add('hidden')
+  document.getElementById('ov-go').style.display='none'
+  document.getElementById('ov-code').style.display='none'
+  document.getElementById('ov-btns').style.display='none'
+  showScreen('lobby')
+}
+function doRestart(){
+  if(!isHost)return
+  clearInterval(gt);gt=null
+  document.getElementById('ov-btns').style.display='none'
+  if(isSolo){
+    resetAndStart()
+  } else {
+    ci=0;pl={};fd=[]
+    fbGet('rooms/'+myCode+'/players').then(data=>{
+      const entries=data?Object.entries(data):[]
+      entries.forEach(([id,v])=>addPl(id,v.name||'Player'))
+      if(!pl[myId])addPl(myId,myName)
+      spawnFd();startLoop()
+      document.getElementById('ov').classList.add('hidden')
+    })
+  }
+}
+function resetAndStart(){
+  ci=0;pl={};fd=[]
+  addPl(myId,myName)
+  spawnFd()
+  document.getElementById('ov').classList.add('hidden')
+  startLoop()
+}
+
+document.getElementById('bbtn-home').onclick=goHome
+document.getElementById('bbtn-restart').onclick=doRestart
+document.getElementById('ov-home').onclick=goHome
+document.getElementById('ov-restart').onclick=doRestart
 
 // ── host ───────────────────────────────────────────────────
 function startHost(){
-  setOv('YOUR ROOM CODE','Share this with friends:')
+  setOv('YOUR ROOM CODE','Share this 4-letter code:')
   const ovCode=document.getElementById('ov-code')
   ovCode.textContent=myCode; ovCode.style.display='block'
   document.getElementById('ov-hint').textContent='Tap code to copy'
@@ -196,13 +263,11 @@ function startHost(){
   addPl(myId,myName)
   spawnFd()
 
-  // Write room info
   fbSet('rooms/'+myCode+'/host',myId)
   fbDel('rooms/'+myCode+'/state')
   fbDel('rooms/'+myCode+'/dirs')
   fbSet('rooms/'+myCode+'/players/'+myId,{name:myName,ts:Date.now()})
 
-  // Listen for new players
   if(esPlayers){esPlayers.close();esPlayers=null}
   esPlayers=fbListen('rooms/'+myCode+'/players',data=>{
     if(!data)return
@@ -212,7 +277,6 @@ function startHost(){
     })
   })
 
-  // Listen for direction changes
   if(esDirs){esDirs.close();esDirs=null}
   esDirs=fbListen('rooms/'+myCode+'/dirs',data=>{
     if(!data)return
@@ -229,28 +293,21 @@ function startHost(){
 // ── client ─────────────────────────────────────────────────
 function startClient(){
   setOv('CONNECTING…','Joining room '+myCode+'…')
-
-  // Register self
   fbSet('rooms/'+myCode+'/players/'+myId,{name:myName,ts:Date.now()})
-
-  // Check host exists
   fbGet('rooms/'+myCode+'/host').then(hostId=>{
     if(!hostId){
-      setOv('NOT FOUND','Room "'+myCode+'" not found.\nAsk the host to share their code.')
+      setOv('NOT FOUND','Room "'+myCode+'" not found.\nCheck the code and try again.')
+      document.getElementById('ov-btns').style.display='flex'
+      document.getElementById('ov-restart').style.display='none'
       return
     }
     setOv('CONNECTED!','Waiting for game state…')
-
-    // Listen for game state
     if(esState){esState.close();esState=null}
     esState=fbListen('rooms/'+myCode+'/state',data=>{
       if(!data)return
       document.getElementById('ov').classList.add('hidden')
       try{renderAll(data.p,data.f)}catch(e){}
     })
-
-    // Listen for round end via state having roundEnd flag
-    // (handled inside state listener above)
   })
 }
 
@@ -299,13 +356,25 @@ function tick(){
   fbSet('rooms/'+myCode+'/state',state)
 
   const alive=ps.filter(p=>p.alive)
-  if(ps.length>1&&alive.length<=1){
+
+  // Solo game over
+  if(isSolo&&alive.length===0){
+    clearInterval(gt);gt=null
+    setTimeout(()=>{
+      setOv('GAME OVER','Score: '+ps[0].score)
+      document.getElementById('ov-btns').style.display='flex'
+      document.getElementById('ov-restart').style.display=''
+    },300)
+    return
+  }
+
+  // Multiplayer round over
+  if(!isSolo&&ps.length>1&&alive.length<=1){
     clearInterval(gt);gt=null
     setTimeout(()=>{
       setOv('ROUND OVER','Next round in 4 seconds…')
       setTimeout(()=>{
         ci=0;pl={};fd=[]
-        // re-add all known players from Firebase
         fbGet('rooms/'+myCode+'/players').then(data=>{
           const entries=data?Object.entries(data):[]
           entries.forEach(([id,v])=>addPl(id,v.name||'Player'))
@@ -329,9 +398,9 @@ function drawBar(ps){
     c.innerHTML='<span class="dot" style="background:'+p.color+'"></span>'+
       '<span>'+esc(p.name)+'</span>'+
       '<span style="color:'+p.color+';margin-left:3px">'+p.score+'</span>'
-    bar.appendChild(c)
+    bar.insertBefore(c,document.getElementById('bar-btns'))
   })
-  bar.appendChild(document.getElementById('rlbl'))
+  bar.insertBefore(document.getElementById('rlbl'),document.getElementById('bar-btns'))
 }
 function draw(ps,f){
   ctx.clearRect(0,0,canvas.width,canvas.height)
